@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>C2 Awareness</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <span class="brand">◢ C2 AWARENESS</span>
+    <span class="sep"></span>
+    <span class="live">LINK ACTIVE</span>
+    <span class="sep"></span>
+    <span>OPS · SECTOR 7</span>
+    <span class="sep"></span>
+    <span>17 TRACKS</span>
+    <span class="clock" id="clock">00:00:00Z</span>
+  </header>
+  <aside class="panel left">
+    <header class="panel-head">
+      <input class="search" placeholder="Search tracks">
+      <div class="section-title">
+        <span>Needs Review</span><span class="count" id="needsCount">0</span>
+      </div>
+    </header>
+    <div class="panel-body" id="needsList"></div>
+    <footer class="panel-foot">
+      <div class="foot-row"><span>Tasked</span><span class="count" id="taskedCount">0</span></div>
+      <div class="foot-row"><span>Cleared</span><span class="count" id="clearedCount">0</span></div>
+      <div class="foot-row"><span>Expired</span><span class="count" id="expiredCount">0</span></div>
+    </footer>
+  </aside>
+
+  <main class="map">
+    <div id="mapCanvas"></div>
+    <svg class="overlay" id="overlay" viewBox="0 0 1000 700" preserveAspectRatio="none"></svg>
+    <div class="callout" id="callout" hidden>
+      <div class="callout-head">Track 001</div>
+      <div class="callout-mgrs">15TvH 14856 23581</div>
+      <div class="callout-row"><span>SPD</span><b>75 KTS</b></div>
+      <div class="callout-row"><span>HDG</span><b>278°</b></div>
+      <div class="callout-row"><span>ALT</span><b>8,460 ft</b></div>
+    </div>
+  </main>
+
+  <aside class="panel right">
+    <section class="track-group">
+      <div class="group-head pending">Pending <span class="count" id="pendingCount">0</span></div>
+      <div id="pendingList"></div>
+    </section>
+    <section class="track-group">
+      <div class="group-head current">Current <span class="count" id="currentCount">0</span></div>
+      <div id="currentList"></div>
+    </section>
+    <section class="track-group">
+      <div class="group-head complete">Complete <span class="count" id="completeCount">0</span></div>
+      <div id="completeList"></div>
+    </section>
+  </aside>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
