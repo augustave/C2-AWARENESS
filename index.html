@@ -8,57 +8,108 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header class="topbar">
-    <span class="brand">◢ C2 AWARENESS</span>
-    <span class="sep"></span>
-    <span class="live">LINK ACTIVE</span>
-    <span class="sep"></span>
-    <span>OPS · SECTOR 7</span>
-    <span class="sep"></span>
-    <span>17 TRACKS</span>
-    <span class="clock" id="clock">00:00:00Z</span>
-  </header>
+
+  <!-- LEFT PANEL -->
   <aside class="panel left">
     <header class="panel-head">
-      <input class="search" placeholder="Search tracks">
+      <div class="search-row">
+        <span class="search-icon">⌕</span>
+        <input class="search" placeholder="Search tracks">
+        <button class="filter-btn">☰</button>
+      </div>
       <div class="section-title">
-        <span>Needs Review</span><span class="count" id="needsCount">0</span>
+        <span>Needs Review</span>
+        <span class="count" id="needsCount">0</span>
+        <span class="chevron">›</span>
       </div>
     </header>
     <div class="panel-body" id="needsList"></div>
     <footer class="panel-foot">
-      <div class="foot-row"><span>Tasked</span><span class="count" id="taskedCount">0</span></div>
-      <div class="foot-row"><span>Cleared</span><span class="count" id="clearedCount">0</span></div>
-      <div class="foot-row"><span>Expired</span><span class="count" id="expiredCount">0</span></div>
+      <div class="foot-row collapsible" data-section="tasked">
+        <span>Tasked</span>
+        <span class="foot-right"><span class="count" id="taskedCount">11</span><span class="chevron">›</span></span>
+      </div>
+      <div class="foot-section" id="taskedSection"></div>
+      <div class="foot-row collapsible" data-section="cleared">
+        <span>Cleared</span>
+        <span class="foot-right"><span class="count" id="clearedCount">21</span><span class="chevron">›</span></span>
+      </div>
+      <div class="foot-section" id="clearedSection"></div>
+      <div class="foot-row collapsible" data-section="expired">
+        <span>Expired</span>
+        <span class="foot-right"><span class="count" id="expiredCount">4</span><span class="chevron down">›</span></span>
+      </div>
+      <div class="foot-section open" id="expiredSection"></div>
     </footer>
   </aside>
 
+  <!-- MAP -->
   <main class="map">
     <div id="mapCanvas"></div>
-    <svg class="overlay" id="overlay" viewBox="0 0 1000 700" preserveAspectRatio="none"></svg>
+    <!-- Layer toggles -->
+    <div class="layer-bar" id="layerBar">
+      <button class="layer-btn active" data-layer="friendly"><span class="ldot" style="background:var(--cyan)"></span>FDY</button>
+      <button class="layer-btn active" data-layer="hostile"><span class="ldot" style="background:var(--red)"></span>HST</button>
+      <button class="layer-btn active" data-layer="unknown"><span class="ldot" style="background:var(--yellow)"></span>UNK</button>
+      <button class="layer-btn active" data-layer="zones"><span class="ldot" style="background:var(--accent)"></span>ZNE</button>
+      <button class="layer-btn active" data-layer="paths"><span class="ldot" style="background:var(--cyan)"></span>PTH</button>
+      <button class="layer-btn" id="nvgBtn"><span class="ldot" style="background:#33ff33"></span>NVG</button>
+      <button class="layer-btn" id="muteBtn"><span class="ldot" style="background:#888"></span>🔊</button>
+    </div>
+    <!-- Callout -->
     <div class="callout" id="callout" hidden>
-      <div class="callout-head">Track 001</div>
-      <div class="callout-mgrs">15TvH 14856 23581</div>
-      <div class="callout-row"><span>SPD</span><b>75 KTS</b></div>
-      <div class="callout-row"><span>HDG</span><b>278°</b></div>
-      <div class="callout-row"><span>ALT</span><b>8,460 ft</b></div>
+      <div class="callout-label" id="calloutLabel">HOSTILE</div>
+      <div class="callout-head" id="calloutHead">Air Vehicle</div>
+      <div class="callout-body">
+        <div class="callout-row"><span>SPD</span><b id="cSpd">75</b><small>m/s</small> <span>RCS</span><b id="cRcs">7</b><small>RCS</small></div>
+        <div class="callout-row"><span>ALT</span><b id="cAlt">8640</b><small>ft AGL</small></div>
+      </div>
+    </div>
+    <!-- Toast container -->
+    <div class="toast-container" id="toasts"></div>
+    <!-- Compass -->
+    <div class="compass-rose">
+      <svg viewBox="0 0 48 48" width="36" height="36">
+        <circle cx="24" cy="24" r="22" fill="rgba(0,0,0,.5)" stroke="#444" stroke-width="1"/>
+        <line x1="24" y1="4" x2="24" y2="12" stroke="#fff" stroke-width="1.5"/>
+        <line x1="24" y1="36" x2="24" y2="44" stroke="#555" stroke-width="1"/>
+        <line x1="4" y1="24" x2="12" y2="24" stroke="#555" stroke-width="1"/>
+        <line x1="36" y1="24" x2="44" y2="24" stroke="#555" stroke-width="1"/>
+        <text x="24" y="10" fill="#fff" font-size="6" text-anchor="middle" font-family="sans-serif">N</text>
+      </svg>
     </div>
   </main>
 
+  <!-- RIGHT PANEL -->
   <aside class="panel right">
     <section class="track-group">
-      <div class="group-head pending">Pending <span class="count" id="pendingCount">0</span></div>
+      <div class="group-head pending" id="pendingHead">
+        <span>Pending</span>
+        <span class="count" id="pendingCount">0</span>
+      </div>
+      <div class="pending-sub" id="pendingSub"></div>
       <div id="pendingList"></div>
     </section>
     <section class="track-group">
-      <div class="group-head current">Current <span class="count" id="currentCount">0</span></div>
+      <div class="group-head current">
+        <span>Current</span>
+        <span class="count" id="currentCount">0</span>
+      </div>
       <div id="currentList"></div>
     </section>
     <section class="track-group">
-      <div class="group-head complete">Complete <span class="count" id="completeCount">0</span></div>
-      <div id="completeList"></div>
+      <div class="group-head complete collapsible" data-section="completeList">
+        <span>Complete</span>
+        <span class="foot-right"><span class="count" id="completeCount">0</span><span class="chevron">›</span></span>
+      </div>
+      <div class="foot-section" id="completeList"></div>
     </section>
   </aside>
+
+  <!-- TIMELINE -->
+  <div class="timeline-bar" id="timeline">
+    <div class="tl-track" id="tlTrack"></div>
+  </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="app.js"></script>
