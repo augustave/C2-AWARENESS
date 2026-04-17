@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "c2",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd '/Users/taoconrad/Dev/Lightweight /C2-AWARENESS' && python3 -m http.server ${PORT:-5174}"],
+      "autoPort": true,
+      "port": 5174
+    }
+  ]
+}

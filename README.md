@@ -1,10 +1,10 @@
-# C2 Awareness
+# 51
 
 A lightweight, browser-based Command & Control (C2) situational awareness interface inspired by [Anduril's IBCS Maneuver Program](https://www.anduril.com/news/anduril-selected-for-u-s-army-s-integrated-battle-command-system-maneuver-program).
 
 **[Live Demo →](https://augustave.github.io/C2-AWARENESS/)**
 
-![C2 Awareness Screenshot](Screenshot%202026-04-08%20at%209.53.43%20AM.png)
+![51 Screenshot](Screenshot%202026-04-08%20at%209.53.43%20AM.png)
 
 ---
 

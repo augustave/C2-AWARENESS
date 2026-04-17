@@ -640,16 +640,331 @@ document.addEventListener('drop', e=>{
   dragAssetId = null;
 });
 
+// ── Sim marker layers ─────────────────────────
+let simHostileMarkers = {};  // id -> L.marker
+let simAssetMarkers = {};    // id -> L.marker
+let simTrailLayers = {};     // id -> L.polyline
+
+// ── Comms log ─────────────────────────────────
+let commsLog = [];
+function addComms(msg, type='info'){
+  const now = new Date();
+  const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  commsLog.push({ts, msg, type});
+  if(commsLog.length > 50) commsLog.shift();
+  renderComms();
+}
+function renderComms(){
+  const el = document.getElementById('commsLog');
+  if(!el) return;
+  el.innerHTML = commsLog.slice(-20).reverse().map(c =>
+    `<div class="comms-entry ${c.type}"><span class="ct">${c.ts}</span><span class="cm">${c.msg}</span></div>`
+  ).join('');
+}
+
+// ── Readiness board ───────────────────────────
+function renderReadiness(){
+  const el = document.getElementById('readinessSection');
+  if(!el) return;
+
+  const stats = typeof simGetStats === 'function' ? simGetStats() : {activeAssets:0,idleAssets:0,threats:0,kills:0};
+  const totalAssets = stats.activeAssets + stats.idleAssets;
+  const readyPct = totalAssets > 0 ? Math.round((stats.idleAssets / Math.max(totalAssets, 1)) * 100) : 100;
+
+  const rows = [
+    {label:'Interceptors', status:stats.activeAssets > 0 ? `${stats.activeAssets} active` : 'idle',
+     dot: stats.activeAssets > 0 ? 'green' : 'gray'},
+    {label:'Threat Level', status:stats.threats > 3 ? 'HIGH' : stats.threats > 0 ? 'MODERATE' : 'LOW',
+     dot: stats.threats > 3 ? 'red' : stats.threats > 0 ? 'yellow' : 'green'},
+    {label:'Kill Rate', status: SIM.totalThreats > 0 ? Math.round((SIM.kills/SIM.totalThreats)*100)+'%' : '--',
+     dot: SIM.totalThreats > 0 && SIM.kills/SIM.totalThreats > 0.7 ? 'green' : 'yellow'},
+    {label:'Asset Ready', status:`${readyPct}%`,
+     dot: readyPct > 60 ? 'green' : readyPct > 30 ? 'yellow' : 'red'},
+  ];
+
+  el.innerHTML = rows.map(r =>
+    `<div class="readiness-row"><span class="readiness-dot ${r.dot}"></span><span class="readiness-label">${r.label}</span><span class="readiness-status">${r.status}</span></div>`
+  ).join('');
+}
+
+// ── FX Canvas (explosions) ────────────────────
+let fxCanvas, fxCtx;
+function initFxCanvas(){
+  fxCanvas = document.getElementById('fxCanvas');
+  if(!fxCanvas) return;
+  const resize = ()=>{
+    fxCanvas.width = fxCanvas.parentElement.offsetWidth;
+    fxCanvas.height = fxCanvas.parentElement.offsetHeight;
+  };
+  resize();
+  window.addEventListener('resize', resize);
+}
+
+function renderExplosions(){
+  if(!fxCtx || !leafletMap) return;
+  fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+
+  SIM.explosions.forEach(ex => {
+    const pt = leafletMap.latLngToContainerPoint([ex.lat, ex.lng]);
+    const r = ex.radius * 4;
+
+    // Outer glow
+    const g1 = fxCtx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, r);
+    g1.addColorStop(0, `rgba(255,120,30,${ex.alpha*0.8})`);
+    g1.addColorStop(0.4, `rgba(255,60,20,${ex.alpha*0.5})`);
+    g1.addColorStop(1, `rgba(255,30,10,0)`);
+    fxCtx.fillStyle = g1;
+    fxCtx.beginPath();
+    fxCtx.arc(pt.x, pt.y, r, 0, Math.PI*2);
+    fxCtx.fill();
+
+    // Inner flash
+    const g2 = fxCtx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, r*0.4);
+    g2.addColorStop(0, `rgba(255,255,200,${ex.alpha})`);
+    g2.addColorStop(1, `rgba(255,200,100,0)`);
+    fxCtx.fillStyle = g2;
+    fxCtx.beginPath();
+    fxCtx.arc(pt.x, pt.y, r*0.4, 0, Math.PI*2);
+    fxCtx.fill();
+
+    // Particles
+    for(let i=0; i<8; i++){
+      const angle = (i/8)*Math.PI*2 + ex.radius*0.1;
+      const px = pt.x + Math.cos(angle) * r * 0.7;
+      const py = pt.y + Math.sin(angle) * r * 0.7;
+      fxCtx.fillStyle = `rgba(255,${150+Math.random()*100},50,${ex.alpha*0.6})`;
+      fxCtx.beginPath();
+      fxCtx.arc(px, py, 2+Math.random()*2, 0, Math.PI*2);
+      fxCtx.fill();
+    }
+  });
+}
+
+// ── Sim-to-map sync ───────────────────────────
+function syncSimToMap(){
+  if(!leafletMap) return;
+
+  // Ensure trail layer group exists
+  if(!layerGroups.trails) layerGroups.trails = L.layerGroup().addTo(leafletMap);
+
+  // Sync sim hostiles
+  SIM.simHostiles.forEach(h => {
+    if(!simHostileMarkers[h.id]){
+      const icon = L.divIcon({
+        className:'map-marker',
+        html:`<div class="sim-hostile-icon" id="shm-${h.id}"><span style="transform:rotate(-45deg);font-size:7px;color:var(--red)">✦</span></div>`,
+        iconSize:[12,12], iconAnchor:[6,6],
+      });
+      simHostileMarkers[h.id] = L.marker([h.lat, h.lng], {icon}).addTo(layerGroups.hostile);
+      simHostileMarkers[h.id].bindTooltip(h.label, {permanent:false, className:'hostile-tip', offset:[10,0]});
+    } else {
+      simHostileMarkers[h.id].setLatLng([h.lat, h.lng]);
+    }
+
+    // Update destroyed visual
+    if(h.status === 'destroyed' || h.status === 'reached'){
+      const el = document.getElementById(`shm-${h.id}`);
+      if(el) el.className = 'sim-hostile-icon destroyed';
+      // Remove after 5s
+      if(!h._removeTimer){
+        h._removeTimer = setTimeout(()=>{
+          if(simHostileMarkers[h.id]){
+            leafletMap.removeLayer(simHostileMarkers[h.id]);
+            delete simHostileMarkers[h.id];
+          }
+        }, 5000);
+      }
+    }
+  });
+
+  // Sync sim assets
+  SIM.simAssets.forEach(a => {
+    if(!simAssetMarkers[a.id]){
+      const icon = L.divIcon({
+        className:'map-marker',
+        html:`<div class="sim-asset-icon" id="sam-${a.id}"></div>`,
+        iconSize:[10,10], iconAnchor:[5,5],
+      });
+      simAssetMarkers[a.id] = L.marker([a.lat, a.lng], {icon}).addTo(layerGroups.friendly);
+    } else {
+      simAssetMarkers[a.id].setLatLng([a.lat, a.lng]);
+    }
+
+    // Update visual state
+    const el = document.getElementById(`sam-${a.id}`);
+    if(el){
+      el.className = 'sim-asset-icon';
+      if(a.status === 'returning') el.classList.add('returning');
+      else if(a.status === 'idle') el.classList.add('idle');
+    }
+
+    // Trail lines
+    if(a.trail && a.trail.length > 1){
+      if(simTrailLayers[a.id]){
+        simTrailLayers[a.id].setLatLngs(a.trail.map(p=>[p.lat,p.lng]));
+      } else {
+        simTrailLayers[a.id] = L.polyline(
+          a.trail.map(p=>[p.lat,p.lng]),
+          {color:'rgba(95,214,255,0.4)', weight:1.5, dashArray:'4,3'}
+        ).addTo(layerGroups.trails);
+      }
+    }
+
+    // Clean up idle assets
+    if(a.status === 'idle' && simTrailLayers[a.id]){
+      leafletMap.removeLayer(simTrailLayers[a.id]);
+      delete simTrailLayers[a.id];
+    }
+  });
+}
+
+// ── Sim stats overlay ─────────────────────────
+function updateStatsOverlay(){
+  const stats = typeof simGetStats === 'function' ? simGetStats() : null;
+  if(!stats) return;
+  const soKills = document.getElementById('soKills');
+  const soLost = document.getElementById('soLost');
+  const soThreats = document.getElementById('soThreats');
+  const soWave = document.getElementById('soWave');
+  const soAvg = document.getElementById('soAvg');
+  if(soKills) soKills.textContent = stats.kills;
+  if(soLost) soLost.textContent = stats.lost;
+  if(soThreats) soThreats.textContent = stats.threats;
+  if(soWave) soWave.textContent = stats.wave;
+  if(soAvg) soAvg.textContent = stats.avgResp;
+}
+
+// ── Sim event callbacks ───────────────────────
+function simOnAssetLaunch(asset, hostile){
+  addComms(`LAUNCH ${asset.id} → ${hostile.label}`, 'info');
+  beepAlert();
+  showToast(`Interceptor launched → ${hostile.label}`, 'info');
+  logEvent('launch', `Launch ${asset.id}`);
+}
+
+function simOnKill(asset, hostile){
+  addComms(`KILL ${hostile.label} by ${asset.id}`, 'success');
+  beepConfirm();
+  showToast(`${hostile.label} DESTROYED`, 'info');
+  logEvent('complete', `Kill ${hostile.label}`);
+}
+
+function simOnMiss(asset, hostile){
+  addComms(`MISS ${hostile.label} — ${asset.id} RTB`, 'warn');
+  showToast(`Missed ${hostile.label}`, 'warning');
+}
+
+function simOnWaveSpawn(hostiles, waveNum){
+  addComms(`WAVE ${waveNum} — ${hostiles.length} threats inbound`, 'alert');
+  beepUrgent();
+  showToast(`Wave ${waveNum}: ${hostiles.length} hostiles inbound!`, 'alert');
+  logEvent('launch', `Wave ${waveNum}`);
+}
+
+function simOnThreatReached(hostile){
+  addComms(`BREACH ${hostile.label} reached target area`, 'alert');
+  beepUrgent();
+  showToast(`THREAT BREACH — ${hostile.label}`, 'alert');
+  logEvent('estop', `Breach ${hostile.label}`);
+}
+
+function simOnTick(){
+  syncSimToMap();
+  updateStatsOverlay();
+  renderReadiness();
+  renderExplosions();
+}
+
+function simOnReset(){
+  // Clean up all sim markers
+  Object.values(simHostileMarkers).forEach(m => { if(leafletMap) leafletMap.removeLayer(m); });
+  Object.values(simAssetMarkers).forEach(m => { if(leafletMap) leafletMap.removeLayer(m); });
+  Object.values(simTrailLayers).forEach(l => { if(leafletMap) leafletMap.removeLayer(l); });
+  simHostileMarkers = {};
+  simAssetMarkers = {};
+  simTrailLayers = {};
+  updateStatsOverlay();
+  renderReadiness();
+  addComms('SIM RESET', 'warn');
+}
+
+// ── Sim control UI wiring ─────────────────────
+function initSimControls(){
+  const playBtn = document.getElementById('simPlay');
+  const pauseBtn = document.getElementById('simPause');
+  const autoBtn = document.getElementById('simAuto');
+  const resetBtn = document.getElementById('simReset');
+
+  if(playBtn) playBtn.addEventListener('click', ()=>{
+    simStart();
+    playBtn.classList.add('sim-running');
+    pauseBtn.classList.remove('sim-running');
+    addComms('SIM STARTED', 'info');
+  });
+
+  if(pauseBtn) pauseBtn.addEventListener('click', ()=>{
+    simPause();
+    pauseBtn.classList.add('active');
+    playBtn.classList.remove('sim-running');
+    addComms('SIM PAUSED', 'warn');
+  });
+
+  document.querySelectorAll('.sim-spd').forEach(btn => {
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.sim-spd').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      simSetSpeed(parseInt(btn.dataset.spd));
+      addComms(`SPEED ${btn.dataset.spd}×`, 'info');
+    });
+  });
+
+  if(autoBtn) autoBtn.addEventListener('click', ()=>{
+    const on = simToggleAutoTask();
+    autoBtn.classList.toggle('active', on);
+    addComms(on ? 'AUTO-TASK ON' : 'AUTO-TASK OFF', on ? 'success' : 'warn');
+    showToast(on ? 'Auto-task AI enabled' : 'Auto-task AI disabled', 'info');
+  });
+
+  if(resetBtn) resetBtn.addEventListener('click', ()=>{
+    simReset();
+    playBtn.classList.remove('sim-running');
+    pauseBtn.classList.remove('active');
+    autoBtn.classList.remove('active');
+  });
+
+  // Trails layer toggle
+  const trailsBtn = document.querySelector('.layer-btn[data-layer="trails"]');
+  if(trailsBtn){
+    trailsBtn.addEventListener('click', ()=>{
+      trailsBtn.classList.toggle('active');
+      if(layerGroups.trails){
+        if(trailsBtn.classList.contains('active')){
+          layerGroups.trails.addTo(leafletMap);
+        } else {
+          leafletMap.removeLayer(layerGroups.trails);
+        }
+      }
+    });
+  }
+}
+
 // ── Init ───────────────────────────────────────
 // Snapshot initial track states
 tracks.forEach(t=>{ prevTrackStates[t.id] = t.state; });
 render();
 initMap();
+initFxCanvas();
+fxCtx = fxCanvas ? fxCanvas.getContext('2d') : null;
+initSimControls();
 renderTimeline();
+renderReadiness();
+renderComms();
 
 // Seed some initial events
 logEvent('launch', 'System init');
 logEvent('launch', 'Track 001 created');
+addComms('SYSTEM ONLINE — 51 C2 AWARENESS', 'success');
+addComms('Awaiting sim start...', 'info');
 
 // ── Telemetry loop ─────────────────────────────
 setInterval(()=>{
@@ -701,3 +1016,10 @@ setInterval(()=>{
 
 // Timeline refresh
 setInterval(renderTimeline, 10000);
+
+// FX animation loop
+function fxLoop(){
+  renderExplosions();
+  requestAnimationFrame(fxLoop);
+}
+requestAnimationFrame(fxLoop);

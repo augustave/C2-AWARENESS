@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>C2 Awareness</title>
+<title>51</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="styles.css">
 </head>
@@ -25,27 +25,22 @@
     </header>
     <div class="panel-body" id="needsList"></div>
     <footer class="panel-foot">
-      <div class="foot-row collapsible" data-section="tasked">
-        <span>Tasked</span>
-        <span class="foot-right"><span class="count" id="taskedCount">11</span><span class="chevron">›</span></span>
-      </div>
+      <div class="foot-row collapsible" data-section="tasked"><span>Tasked</span><span class="foot-right"><span class="count" id="taskedCount">0</span><span class="chevron">›</span></span></div>
       <div class="foot-section" id="taskedSection"></div>
-      <div class="foot-row collapsible" data-section="cleared">
-        <span>Cleared</span>
-        <span class="foot-right"><span class="count" id="clearedCount">21</span><span class="chevron">›</span></span>
-      </div>
+      <div class="foot-row collapsible" data-section="cleared"><span>Cleared</span><span class="foot-right"><span class="count" id="clearedCount">0</span><span class="chevron">›</span></span></div>
       <div class="foot-section" id="clearedSection"></div>
-      <div class="foot-row collapsible" data-section="expired">
-        <span>Expired</span>
-        <span class="foot-right"><span class="count" id="expiredCount">4</span><span class="chevron down">›</span></span>
-      </div>
+      <div class="foot-row collapsible" data-section="expired"><span>Expired</span><span class="foot-right"><span class="count" id="expiredCount">0</span><span class="chevron down">›</span></span></div>
       <div class="foot-section open" id="expiredSection"></div>
+      <!-- Readiness board -->
+      <div class="readiness-head collapsible" data-section="readiness"><span>Asset Readiness</span><span class="chevron down">›</span></div>
+      <div class="foot-section open readiness-board" id="readinessSection"></div>
     </footer>
   </aside>
 
   <!-- MAP -->
   <main class="map">
     <div id="mapCanvas"></div>
+    <canvas id="fxCanvas"></canvas>
     <!-- Layer toggles -->
     <div class="layer-bar" id="layerBar">
       <button class="layer-btn active" data-layer="friendly"><span class="ldot" style="background:var(--cyan)"></span>FDY</button>
@@ -53,8 +48,27 @@
       <button class="layer-btn active" data-layer="unknown"><span class="ldot" style="background:var(--yellow)"></span>UNK</button>
       <button class="layer-btn active" data-layer="zones"><span class="ldot" style="background:var(--accent)"></span>ZNE</button>
       <button class="layer-btn active" data-layer="paths"><span class="ldot" style="background:var(--cyan)"></span>PTH</button>
+      <button class="layer-btn active" data-layer="trails"><span class="ldot" style="background:#888"></span>TRL</button>
       <button class="layer-btn" id="nvgBtn"><span class="ldot" style="background:#33ff33"></span>NVG</button>
       <button class="layer-btn" id="muteBtn"><span class="ldot" style="background:#888"></span>🔊</button>
+    </div>
+    <!-- Sim controls -->
+    <div class="sim-bar" id="simBar">
+      <button class="sim-btn" id="simPlay" title="Play">▶</button>
+      <button class="sim-btn" id="simPause" title="Pause">⏸</button>
+      <button class="sim-btn sim-spd active" data-spd="1">1×</button>
+      <button class="sim-btn sim-spd" data-spd="2">2×</button>
+      <button class="sim-btn sim-spd" data-spd="5">5×</button>
+      <button class="sim-btn" id="simAuto" title="Auto-Task AI">🤖</button>
+      <button class="sim-btn" id="simReset" title="Reset">↻</button>
+    </div>
+    <!-- Stats overlay -->
+    <div class="stats-overlay" id="statsOverlay">
+      <div class="so-row"><span>INTERCEPTED</span><b id="soKills">0</b></div>
+      <div class="so-row"><span>ASSETS LOST</span><b id="soLost">0</b></div>
+      <div class="so-row"><span>THREATS</span><b id="soThreats">0</b></div>
+      <div class="so-row"><span>WAVE</span><b id="soWave">1</b></div>
+      <div class="so-row"><span>AVG RESP</span><b id="soAvg">--</b></div>
     </div>
     <!-- Callout -->
     <div class="callout" id="callout" hidden>
@@ -83,26 +97,24 @@
   <!-- RIGHT PANEL -->
   <aside class="panel right">
     <section class="track-group">
-      <div class="group-head pending" id="pendingHead">
-        <span>Pending</span>
-        <span class="count" id="pendingCount">0</span>
-      </div>
+      <div class="group-head pending" id="pendingHead"><span>Pending</span><span class="count" id="pendingCount">0</span></div>
       <div class="pending-sub" id="pendingSub"></div>
       <div id="pendingList"></div>
     </section>
     <section class="track-group">
-      <div class="group-head current">
-        <span>Current</span>
-        <span class="count" id="currentCount">0</span>
-      </div>
+      <div class="group-head current"><span>Current</span><span class="count" id="currentCount">0</span></div>
       <div id="currentList"></div>
     </section>
     <section class="track-group">
-      <div class="group-head complete collapsible" data-section="completeList">
-        <span>Complete</span>
-        <span class="foot-right"><span class="count" id="completeCount">0</span><span class="chevron">›</span></span>
-      </div>
+      <div class="group-head complete collapsible" data-section="completeList"><span>Complete</span><span class="foot-right"><span class="count" id="completeCount">0</span><span class="chevron">›</span></span></div>
       <div class="foot-section" id="completeList"></div>
+    </section>
+    <!-- Comms log -->
+    <section class="comms-section">
+      <div class="comms-head collapsible" data-section="commsLog"><span>⚡ COMMS LOG</span><span class="chevron down">›</span></div>
+      <div class="foot-section open comms-log" id="commsLogSection">
+        <div id="commsLog"></div>
+      </div>
     </section>
   </aside>
 
@@ -112,6 +124,7 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="sim.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
