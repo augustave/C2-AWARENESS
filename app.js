@@ -74,6 +74,8 @@ let tracks = [
 for(let i=1;i<=12;i++){
   tracks.push({id:`TC${i}`, asset:String(i%5+1).padStart(3,'0'), state:'complete', label:'complete', eta:'00:00', track:String(i%3+1).padStart(3,'0'), dist:0});
 }
+const initialAssets = assets.map(a=>({...a}));
+const initialTracks = tracks.map(t=>({...t}));
 
 // Geofences
 const zones = [
@@ -114,6 +116,8 @@ let audioCtx = null;
 let muted = false;
 let eventLog = [];
 let prevTrackStates = {};
+let demoTimers = [];
+let taskingReceipts = [];
 
 // ── Audio ──────────────────────────────────────
 function getAudioCtx(){
@@ -318,6 +322,7 @@ function initMap(){
   layerGroups.friendly = L.layerGroup().addTo(leafletMap);
   layerGroups.hostile = L.layerGroup().addTo(leafletMap);
   layerGroups.unknown = L.layerGroup().addTo(leafletMap);
+  layerGroups.trails = L.layerGroup().addTo(leafletMap);
 
   // Geofences
   zones.forEach(z=>{
@@ -489,6 +494,7 @@ document.addEventListener('click', e=>{
   if(layerBtn){
     const layer = layerBtn.dataset.layer;
     layerBtn.classList.toggle('active');
+    if(!layerGroups[layer]) return;
     if(layerBtn.classList.contains('active')){
       layerGroups[layer].addTo(leafletMap);
     } else {
@@ -662,6 +668,72 @@ function renderComms(){
   ).join('');
 }
 
+function formatTti(seconds){
+  if(seconds < 60) return `${seconds}s`;
+  const min = Math.floor(seconds / 60);
+  const sec = seconds % 60;
+  return `${min}:${String(sec).padStart(2,'0')}`;
+}
+
+function fallbackReceipt(hostile){
+  const rangeKm = haversine(hostile.lat, hostile.lng, SIM.targetLat, SIM.targetLng);
+  return {
+    rank: taskingReceipts.length + 1,
+    rangeKm: Number(rangeKm.toFixed(1)),
+    ttiSec: Math.round(rangeKm / (hostile.spd / 1000)),
+    threatSpeed: Math.round(hostile.spd),
+    rcs: Number(hostile.rcs.toFixed(1)),
+    confidence: 82,
+    reason: 'Auto-task selected an active unengaged threat',
+    constraints: ['asset ready', 'no active engagement', 'mesh link nominal'],
+  };
+}
+
+function addTaskingReceipt(asset, hostile, receipt){
+  const r = receipt || fallbackReceipt(hostile);
+  taskingReceipts.push({
+    id: `${asset.id}-${hostile.id}-${Date.now()}`,
+    assetId: asset.id,
+    hostileLabel: hostile.label,
+    ...r,
+  });
+  if(taskingReceipts.length > 8) taskingReceipts.shift();
+  renderTaskingReceipts();
+}
+
+function renderTaskingReceipts(){
+  const list = document.getElementById('receiptList');
+  const count = document.getElementById('receiptCount');
+  if(!list) return;
+  if(count) count.textContent = taskingReceipts.length;
+
+  if(taskingReceipts.length === 0){
+    list.innerHTML = '<div class="receipt-empty">No AI tasking decisions yet.</div>';
+    return;
+  }
+
+  list.innerHTML = taskingReceipts.slice(-4).reverse().map(r => `
+    <div class="receipt-card">
+      <div class="receipt-top">
+        <span>${r.assetId} -> ${r.hostileLabel}</span>
+        <span class="receipt-conf">${r.confidence}%</span>
+      </div>
+      <div class="receipt-why">${r.reason}</div>
+      <div class="receipt-grid">
+        <div><span>Rank</span><b>#${r.rank}</b></div>
+        <div><span>TTI</span><b>${formatTti(r.ttiSec)}</b></div>
+        <div><span>Range</span><b>${r.rangeKm} km</b></div>
+        <div><span>SPD</span><b>${r.threatSpeed} m/s</b></div>
+        <div><span>RCS</span><b>${r.rcs}</b></div>
+        <div><span>ROE</span><b>HIL</b></div>
+      </div>
+      <div class="receipt-tags">
+        ${r.constraints.map(c=>`<span>${c}</span>`).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
 // ── Readiness board ───────────────────────────
 function renderReadiness(){
   const el = document.getElementById('readinessSection');
@@ -832,11 +904,41 @@ function updateStatsOverlay(){
   if(soThreats) soThreats.textContent = stats.threats;
   if(soWave) soWave.textContent = stats.wave;
   if(soAvg) soAvg.textContent = stats.avgResp;
+  updateMissionBrief(stats);
+}
+
+function setSimSpeedUI(spd){
+  simSetSpeed(spd);
+  document.querySelectorAll('.sim-spd').forEach(btn=>{
+    btn.classList.toggle('active', parseInt(btn.dataset.spd) === spd);
+  });
+  updateStatsOverlay();
+}
+
+function updateMissionBrief(stats){
+  const simState = document.getElementById('briefSimState');
+  const threatState = document.getElementById('briefThreatState');
+  const stateWrap = document.querySelector('.mission-state');
+  if(!simState || !threatState || !stateWrap) return;
+
+  const active = SIM.running ? `SIM LIVE ${SIM.speed}×` : 'SIM IDLE';
+  const posture = stats.threats > 5 || stats.lost > 0
+    ? 'CRITICAL'
+    : stats.threats > 0
+      ? 'ELEVATED'
+      : 'LOW';
+
+  simState.textContent = active;
+  threatState.textContent = posture;
+  stateWrap.classList.toggle('critical', posture === 'CRITICAL');
+  stateWrap.classList.toggle('elevated', posture === 'ELEVATED');
 }
 
 // ── Sim event callbacks ───────────────────────
-function simOnAssetLaunch(asset, hostile){
-  addComms(`LAUNCH ${asset.id} → ${hostile.label}`, 'info');
+function simOnAssetLaunch(asset, hostile, receipt){
+  const r = receipt || fallbackReceipt(hostile);
+  addTaskingReceipt(asset, hostile, r);
+  addComms(`LAUNCH ${asset.id} -> ${hostile.label} | WHY TTI ${formatTti(r.ttiSec)} / ${r.rangeKm}km / ${r.confidence}%`, 'info');
   beepAlert();
   showToast(`Interceptor launched → ${hostile.label}`, 'info');
   logEvent('launch', `Launch ${asset.id}`);
@@ -883,9 +985,85 @@ function simOnReset(){
   simHostileMarkers = {};
   simAssetMarkers = {};
   simTrailLayers = {};
+  taskingReceipts = [];
+  renderTaskingReceipts();
   updateStatsOverlay();
   renderReadiness();
   addComms('SIM RESET', 'warn');
+}
+
+function clearDemoTimers(){
+  demoTimers.forEach(timer=>clearTimeout(timer));
+  demoTimers = [];
+}
+
+function queueDemoStep(delay, fn){
+  const timer = setTimeout(fn, delay);
+  demoTimers.push(timer);
+}
+
+function setAutoTaskUI(on){
+  SIM.autoTask = on;
+  const autoBtn = document.getElementById('simAuto');
+  if(autoBtn) autoBtn.classList.toggle('active', on);
+}
+
+function resetOperatorState(){
+  assets.splice(0, assets.length, ...initialAssets.map(a=>({...a})));
+  tracks = initialTracks.map(t=>({...t}));
+  selectedAssetId = '001';
+  prevTrackStates = {};
+  tracks.forEach(t=>{ prevTrackStates[t.id] = t.state; });
+
+  assets.forEach(a=>{
+    if(markerLayers[a.id]) markerLayers[a.id].setLatLng([a.lat, a.lng]);
+  });
+
+  const callout = document.getElementById('callout');
+  if(callout) callout.hidden = true;
+  render();
+}
+
+function runDemoScenario(){
+  clearDemoTimers();
+  simReset();
+  resetOperatorState();
+  simStart();
+  setAutoTaskUI(true);
+  setSimSpeedUI(5);
+
+  const playBtn = document.getElementById('simPlay');
+  const pauseBtn = document.getElementById('simPause');
+  const demoBtn = document.getElementById('demoRun');
+  if(playBtn) playBtn.classList.add('sim-running');
+  if(pauseBtn) pauseBtn.classList.remove('active');
+  if(demoBtn) demoBtn.classList.add('active');
+
+  addComms('DEMO RUN — wave spawned, auto-task enabled', 'alert');
+  showToast('Demo Run: live wave, auto-tasking, 5x speed', 'warning');
+  logEvent('launch', 'Demo Run');
+  selectAsset('001');
+
+  queueDemoStep(2500, ()=>{
+    addComms('OPERATOR REVIEW — Track 001 selected for handoff', 'info');
+    showToast('Operator review: Track 001 telemetry pinned', 'info');
+    selectAsset('001');
+  });
+
+  queueDemoStep(5500, ()=>{
+    addComms('AI TASKING — closest inbound threats assigned first', 'success');
+    showToast('Auto-task AI prioritizing closest threats', 'info');
+  });
+
+  queueDemoStep(10000, ()=>{
+    addComms('WATCH — kills, misses, and breaches update the board', 'warn');
+    showToast('Watch the stats, comms log, and map trails', 'warning');
+  });
+
+  queueDemoStep(18000, ()=>{
+    if(demoBtn) demoBtn.classList.remove('active');
+    addComms('DEMO RUN CONTINUES — use pause/reset when done', 'info');
+  });
 }
 
 // ── Sim control UI wiring ─────────────────────
@@ -894,26 +1072,36 @@ function initSimControls(){
   const pauseBtn = document.getElementById('simPause');
   const autoBtn = document.getElementById('simAuto');
   const resetBtn = document.getElementById('simReset');
+  const demoBtn = document.getElementById('demoRun');
+
+  if(demoBtn) demoBtn.addEventListener('click', runDemoScenario);
 
   if(playBtn) playBtn.addEventListener('click', ()=>{
+    clearDemoTimers();
+    const demoBtn = document.getElementById('demoRun');
+    if(demoBtn) demoBtn.classList.remove('active');
     simStart();
     playBtn.classList.add('sim-running');
     pauseBtn.classList.remove('sim-running');
+    pauseBtn.classList.remove('active');
+    updateStatsOverlay();
     addComms('SIM STARTED', 'info');
   });
 
   if(pauseBtn) pauseBtn.addEventListener('click', ()=>{
+    clearDemoTimers();
+    const demoBtn = document.getElementById('demoRun');
+    if(demoBtn) demoBtn.classList.remove('active');
     simPause();
     pauseBtn.classList.add('active');
     playBtn.classList.remove('sim-running');
+    updateStatsOverlay();
     addComms('SIM PAUSED', 'warn');
   });
 
   document.querySelectorAll('.sim-spd').forEach(btn => {
     btn.addEventListener('click', ()=>{
-      document.querySelectorAll('.sim-spd').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      simSetSpeed(parseInt(btn.dataset.spd));
+      setSimSpeedUI(parseInt(btn.dataset.spd));
       addComms(`SPEED ${btn.dataset.spd}×`, 'info');
     });
   });
@@ -926,26 +1114,16 @@ function initSimControls(){
   });
 
   if(resetBtn) resetBtn.addEventListener('click', ()=>{
+    clearDemoTimers();
     simReset();
+    resetOperatorState();
     playBtn.classList.remove('sim-running');
     pauseBtn.classList.remove('active');
     autoBtn.classList.remove('active');
+    if(demoBtn) demoBtn.classList.remove('active');
+    setSimSpeedUI(1);
   });
 
-  // Trails layer toggle
-  const trailsBtn = document.querySelector('.layer-btn[data-layer="trails"]');
-  if(trailsBtn){
-    trailsBtn.addEventListener('click', ()=>{
-      trailsBtn.classList.toggle('active');
-      if(layerGroups.trails){
-        if(trailsBtn.classList.contains('active')){
-          layerGroups.trails.addTo(leafletMap);
-        } else {
-          leafletMap.removeLayer(layerGroups.trails);
-        }
-      }
-    });
-  }
 }
 
 // ── Init ───────────────────────────────────────
@@ -959,6 +1137,7 @@ initSimControls();
 renderTimeline();
 renderReadiness();
 renderComms();
+renderTaskingReceipts();
 
 // Seed some initial events
 logEvent('launch', 'System init');

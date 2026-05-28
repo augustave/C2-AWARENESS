@@ -41,19 +41,38 @@
   <main class="map">
     <div id="mapCanvas"></div>
     <canvas id="fxCanvas"></canvas>
+    <!-- Mission context -->
+    <section class="mission-brief" aria-label="Mission briefing">
+      <div class="mission-copy">
+        <div class="mission-kicker">51 C2 Awareness</div>
+        <h1>Operation Dry Lake</h1>
+        <p>Human-supervised UAS defense corridor.</p>
+      </div>
+      <div class="mission-facts" aria-label="Mission facts">
+        <div><span>AO</span><b>NELLIS</b></div>
+        <div><span>ROE</span><b>HIL</b></div>
+        <div><span>WINDOW</span><b>10 MIN</b></div>
+        <div><span>LINK</span><b>MESH</b></div>
+      </div>
+      <div class="mission-state">
+        <span id="briefSimState">SIM IDLE</span>
+        <b id="briefThreatState">LOW</b>
+      </div>
+    </section>
     <!-- Layer toggles -->
     <div class="layer-bar" id="layerBar">
-      <button class="layer-btn active" data-layer="friendly"><span class="ldot" style="background:var(--cyan)"></span>FDY</button>
-      <button class="layer-btn active" data-layer="hostile"><span class="ldot" style="background:var(--red)"></span>HST</button>
-      <button class="layer-btn active" data-layer="unknown"><span class="ldot" style="background:var(--yellow)"></span>UNK</button>
-      <button class="layer-btn active" data-layer="zones"><span class="ldot" style="background:var(--accent)"></span>ZNE</button>
-      <button class="layer-btn active" data-layer="paths"><span class="ldot" style="background:var(--cyan)"></span>PTH</button>
-      <button class="layer-btn active" data-layer="trails"><span class="ldot" style="background:#888"></span>TRL</button>
-      <button class="layer-btn" id="nvgBtn"><span class="ldot" style="background:#33ff33"></span>NVG</button>
-      <button class="layer-btn" id="muteBtn"><span class="ldot" style="background:#888"></span>🔊</button>
+      <button class="layer-btn active" data-layer="friendly" title="Friendly units"><span class="ldot" style="background:var(--cyan)"></span>FDY</button>
+      <button class="layer-btn active" data-layer="hostile" title="Hostile tracks"><span class="ldot" style="background:var(--red)"></span>HST</button>
+      <button class="layer-btn active" data-layer="unknown" title="Unknown tracks"><span class="ldot" style="background:var(--yellow)"></span>UNK</button>
+      <button class="layer-btn active" data-layer="zones" title="Engagement zones"><span class="ldot" style="background:var(--accent)"></span>ZNE</button>
+      <button class="layer-btn active" data-layer="paths" title="Flight paths"><span class="ldot" style="background:var(--cyan)"></span>PTH</button>
+      <button class="layer-btn active" data-layer="trails" title="Interceptor trails"><span class="ldot" style="background:#888"></span>TRL</button>
+      <button class="layer-btn" id="nvgBtn" title="Night vision mode"><span class="ldot" style="background:#33ff33"></span>NVG</button>
+      <button class="layer-btn" id="muteBtn" title="Mute alerts"><span class="ldot" style="background:#888"></span>🔊</button>
     </div>
     <!-- Sim controls -->
     <div class="sim-bar" id="simBar">
+      <button class="sim-btn demo-btn" id="demoRun" title="Run guided demo">DEMO</button>
       <button class="sim-btn" id="simPlay" title="Play">▶</button>
       <button class="sim-btn" id="simPause" title="Pause">⏸</button>
       <button class="sim-btn sim-spd active" data-spd="1">1×</button>
@@ -108,6 +127,11 @@
     <section class="track-group">
       <div class="group-head complete collapsible" data-section="completeList"><span>Complete</span><span class="foot-right"><span class="count" id="completeCount">0</span><span class="chevron">›</span></span></div>
       <div class="foot-section" id="completeList"></div>
+    </section>
+    <!-- Tasking receipts -->
+    <section class="receipts-section">
+      <div class="receipts-head"><span>AI TASKING RECEIPTS</span><span class="count" id="receiptCount">0</span></div>
+      <div class="receipt-list" id="receiptList"></div>
     </section>
     <!-- Comms log -->
     <section class="comms-section">

@@ -8,6 +8,19 @@ A lightweight, browser-based Command & Control (C2) situational awareness interf
 
 ---
 
+## Portfolio Demo Path
+
+Open the app and press **DEMO** in the bottom control bar. The scripted run resets the battlespace, spawns an inbound wave, enables auto-tasking, accelerates the sim to 5x, and walks the reviewer through the map, comms log, readiness board, and engagement telemetry.
+
+What to watch:
+- Mission brief shifts from idle to live posture
+- Hostile tracks spawn and move toward the defended area
+- Auto-tasking launches interceptors against the closest threats
+- AI tasking receipts explain rank, time-to-impact, range, confidence, and constraints
+- Comms, toasts, timeline events, kills, misses, and breaches update in real time
+
+This is the intended 60-second review path for portfolio use.
+
 ## Overview
 
 A single-page prototype that replicates a three-pane tactical C2 layout with real satellite imagery, live telemetry simulation, and full interactivity — no build step, no backend, no frameworks.
@@ -20,6 +33,7 @@ A single-page prototype that replicates a three-pane tactical C2 layout with rea
 - **Live telemetry simulation** — SPD, RCS, HDG, ALT update every 2s with drift
 - **Expandable asset cards** — click to expand with full stats, MGRS coordinates, and action buttons
 - **Track queue management** — Pending → Current → Complete lifecycle with E-Stop and Cancel actions
+- **AI tasking receipts** — Every auto-tasked launch records the reason, rank, TTI, range, confidence, and constraints behind the decision
 
 ### Map
 - **39+ tactical markers** — Friendlies (cyan unit symbols), Hostiles (red diamonds with heading arrows), Unknowns (yellow triangles)
@@ -32,6 +46,7 @@ A single-page prototype that replicates a three-pane tactical C2 layout with rea
 
 ### Interactivity
 - **Layer toggles** (top-right) — Show/hide Friendlies, Hostiles, Unknowns, Zones, Paths
+- **Guided demo run** — One-click scripted scenario for portfolio review
 - **NVG mode** — Green monochrome night-vision theme toggle
 - **Keyboard shortcuts**:
   - `↑/↓` — Cycle through assets

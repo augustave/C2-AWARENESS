@@ -149,6 +149,25 @@ function simLaunchAsset(hostileId) {
   return asset;
 }
 
+function buildTaskingReceipt(hostile, rank) {
+  const rangeKm = simHaversine(hostile.lat, hostile.lng, SIM.targetLat, SIM.targetLng);
+  const ttiSec = Math.round(rangeKm / (hostile.spd / 1000));
+  const speedPenalty = Math.max(0, (hostile.spd - 70) * 0.12);
+  const rcsBonus = hostile.rcs >= 5 ? 2 : -4;
+  const confidence = Math.round(Math.max(55, Math.min(96, 94 - rangeKm * 2 - speedPenalty + rcsBonus)));
+
+  return {
+    rank,
+    rangeKm: Number(rangeKm.toFixed(1)),
+    ttiSec,
+    threatSpeed: Math.round(hostile.spd),
+    rcs: Number(hostile.rcs.toFixed(1)),
+    confidence,
+    reason: 'Closest time-to-impact among unengaged threats',
+    constraints: ['asset ready', 'no active engagement', 'mesh link nominal'],
+  };
+}
+
 // ── Auto-tasking AI ──────────────────────────
 function autoTaskAI() {
   if (!SIM.autoTask) return;
@@ -169,10 +188,12 @@ function autoTaskAI() {
   let launched = 0;
   for (const h of unengaged) {
     if (launched >= 2) break;
+    const receipt = buildTaskingReceipt(h, launched + 1);
     const asset = simLaunchAsset(h.id);
     if (asset) {
       launched++;
-      if (typeof simOnAssetLaunch === 'function') simOnAssetLaunch(asset, h);
+      asset.receipt = receipt;
+      if (typeof simOnAssetLaunch === 'function') simOnAssetLaunch(asset, h, receipt);
     }
   }
 }
